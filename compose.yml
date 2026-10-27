@@ -18,13 +18,15 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./apps/backend/.env:/app/apps/backend/.env:ro
-    # Required on Linux: let the container reach host services (the Supabase CLI) via host.docker.internal
+    # Required on Linux: let the container reach host services (the Supabase CLI & LM Studio) via host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Override host-specific URLs only when running via compose, so apps/backend/.env
     # can keep localhost for `turbo dev`. A real env var beats the mounted .env
     environment:
       SUPABASE_URL: http://host.docker.internal:54321
+      LOCAL_LLM_ENABLED: "true"
+      LLM_BASE_URL: http://host.docker.internal:1234/v1
     # Liveness probe. Using fetch since the slim image ships no curl/wget.
     healthcheck:
       test:

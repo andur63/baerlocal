@@ -12,16 +12,20 @@ export const sentryClient = Sentry.init({
 	dsn: config.sentryDsn || "",
 	environment: config.nodeEnv || "development",
 	tracesSampleRate: 1.0,
-	enabled: ["production", "staging"].includes(config.nodeEnv),
+	enabled:
+		!config.localLlmEnabled &&
+		["production", "staging"].includes(config.nodeEnv),
 	skipOpenTelemetrySetup: true,
 });
 
-export const langfuseSpanProcessor = new LangfuseSpanProcessor({
-	environment: config.nodeEnv,
-});
+export const langfuseSpanProcessor = config.localLlmEnabled
+	? undefined
+	: new LangfuseSpanProcessor({
+			environment: config.nodeEnv,
+		});
 
 const sdk = new NodeSDK({
-	spanProcessors: [langfuseSpanProcessor],
+	spanProcessors: langfuseSpanProcessor ? [langfuseSpanProcessor] : [],
 	sampler: sentryClient ? new SentrySampler(sentryClient) : undefined,
 	contextManager: new Sentry.SentryContextManager(),
 	textMapPropagator: new SentryPropagator(),
@@ -30,7 +34,9 @@ const sdk = new NodeSDK({
 
 sdk.start();
 Sentry.validateOpenTelemetrySetup();
-registerTelemetry(new LangfuseVercelAiSdkIntegration());
+if (!config.localLlmEnabled) {
+	registerTelemetry(new LangfuseVercelAiSdkIntegration());
+}
 
 if (config.nodeEnv === "development") {
 	process.on("SIGTERM", () => process.exit(0));

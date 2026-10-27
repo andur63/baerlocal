@@ -42,10 +42,39 @@ export interface Config {
 	staanSearchApiUrl?: string;
 	staanSearchMaxRPS?: number;
 	webSearchProvider?: string;
+	localLlmEnabled: boolean;
+	llmBaseUrl: string;
 }
+
+function applyLocalLlmDefaults(): void {
+	if (process.env.LOCAL_LLM_ENABLED !== "true") {
+		return;
+	}
+	process.env.LLM_BASE_URL ||= "http://localhost:1234/v1";
+	process.env.MISTRAL_API_KEY ||= "lm-studio";
+	process.env.MISTRAL_EMBEDDING_MODEL ||= "local-embedding";
+	process.env.MISTRAL_EMBED_MAX_CONTEXT_TOKENS ||= "8192";
+	process.env.MISTRAL_EMBED_MAX_TOTAL_TOKENS_PER_REQUEST ||= "16384";
+	process.env.MISTRAL_EMBED_MAX_DOCUMENTS_PER_REQUEST ||= "16";
+	process.env.MISTRAL_EMBEDDING_DIMENSIONS ||= "1024";
+	process.env.MISTRAL_MAX_RPS ||= "10";
+	process.env.UPLOAD_FILE_SIZE_LIMIT_MB ||= "20";
+	process.env.NODE_ENV ||= "development";
+	process.env.MODEL_TEMPERATURE ||= "0.3";
+	process.env.FAST_MODEL_IDENTIFIER ||= "local-model";
+	process.env.PRECISE_MODEL_IDENTIFIER ||= "local-model";
+	process.env.DEFAULT_DOCUMENT_PROCESSING_MODEL ||= "fast";
+	process.env.SENTRY_DSN ||= "https://local@localhost/1";
+	process.env.GOTENBERG_URL ||= "http://localhost:3001";
+	process.env.GOTENBERG_API_BASIC_AUTH_USERNAME ||= "local";
+	process.env.GOTENBERG_API_BASIC_AUTH_PASSWORD ||= "local";
+}
+
+applyLocalLlmDefaults();
 
 /* eslint-disable-next-line complexity */
 export function verifyConfig(): void {
+	applyLocalLlmDefaults();
 	if (!process.env.MISTRAL_API_KEY) {
 		throw new Error("MISTRAL_API_KEY must be defined");
 	}
@@ -215,6 +244,7 @@ export const config: Config = {
 		process.env.FEATURE_FLAG_WEB_SEARCH_ALLOWED === "true",
 	featureFlagMemoryLog: process.env.FEATURE_FLAG_MEMORY_LOG === "true",
 	isTracingEnabled:
+		process.env.LOCAL_LLM_ENABLED !== "true" &&
 		process.env.NODE_ENV !== undefined &&
 		process.env.NODE_ENV !== "production" &&
 		process.env.NODE_ENV !== "test",
@@ -222,4 +252,10 @@ export const config: Config = {
 	staanSearchApiUrl: process.env.STAAN_SEARCH_API_URL,
 	staanSearchMaxRPS: parseInt(process.env.STAAN_SEARCH_MAX_RPS, 10),
 	webSearchProvider: process.env.WEB_SEARCH_PROVIDER,
+	localLlmEnabled: process.env.LOCAL_LLM_ENABLED === "true",
+	llmBaseUrl:
+		process.env.LLM_BASE_URL ||
+		(process.env.LOCAL_LLM_ENABLED === "true"
+			? "http://localhost:1234/v1"
+			: "https://api.mistral.ai/v1"),
 };

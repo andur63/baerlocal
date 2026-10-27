@@ -10,7 +10,14 @@ function assertLocalTarget() {
 		throw new Error(`SUPABASE_URL is not a valid URL: "${config.supabaseUrl}"`);
 	}
 
-	const localHosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
+	const localHosts = [
+		"localhost",
+		"127.0.0.1",
+		"0.0.0.0",
+		"::1",
+		"kong",
+		"host.docker.internal",
+	];
 	if (!localHosts.includes(host)) {
 		throw new Error(
 			`Refusing to seed: SUPABASE_URL points to a non-local target ("${config.supabaseUrl}"). ` +
@@ -28,6 +35,7 @@ export async function seedLocalAdmin() {
 
 	const id = crypto.randomUUID();
 	const email = "local.admin@ts.berlin";
+	const password = process.env.LOCAL_ADMIN_PASSWORD || "LocalAdmin123!";
 
 	const { data, error: listUsersError } = await supabase.auth.admin.listUsers();
 
@@ -44,6 +52,7 @@ export async function seedLocalAdmin() {
 	const { error: createUserError } = await supabase.auth.admin.createUser({
 		id,
 		email,
+		password,
 		email_confirm: true,
 		user_metadata: {
 			first_name: "Local",

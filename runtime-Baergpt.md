@@ -1,0 +1,3 @@
+baergpt-local-kong              | 172.18.0.1 - - [27/Oct/2026:20:19:01 +0000] "POST /auth/v1/token?grant_type=password HTTP/1.1" 400 68 "http://localhost:5173/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"ote_addr":"172.18.0.1","request_id":"8ad07160-7d42-44d7-be09-6db75ca3
+4d9f","time":"2026-10-27T20:19:01Z"}
+baergpt-local-auth              | {"component":"api","duration":1515121,"error_code":"invalid_credentials","grant_type":"password","level":"info","method":"POST","msg":"request completed","path":"/token","referer":"http://localhost:5173/","remote_addr":"172.18.0.1","request_id":"8ad07160-7d42-44d7-be09-6db75ca34d9f","status":400,"time":"2026-10-27T20:19:01Z"}

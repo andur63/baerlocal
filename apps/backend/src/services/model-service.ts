@@ -15,19 +15,19 @@ export class ModelService {
 		fast: new LLMHandler(
 			"fast",
 			getLanguageModel(config.fastModelIdentifier),
-			"https://api.mistral.ai/v1",
+			config.llmBaseUrl,
 		),
 		precise: new LLMHandler(
 			"precise",
 			getLanguageModel(config.preciseModelIdentifier),
-			"https://api.mistral.ai/v1",
+			config.llmBaseUrl,
 		),
 		...(config.featureFlagExperimentalModelAllowed
 			? {
 					experimental: new LLMHandler(
 						"experimental",
 						getLanguageModel(config.experimentalModelIdentifier),
-						"https://api.mistral.ai/v1",
+						config.llmBaseUrl,
 					),
 				}
 			: {}),

@@ -141,18 +141,25 @@ export class WordDocumentExtractionService {
 			`${config.gotenbergApiBasicAuthUsername}:${config.gotenbergApiBasicAuthPassword}`,
 		).toString("base64")}`;
 
-		const res = await fetch(endpoint, {
-			method: "POST",
-			headers: {
-				Authorization: authHeader,
-				Accept: "application/pdf",
-			},
-			body: form,
-		});
-		if (!res.ok) {
-			throw new Error(`HTTP ${res.status} ${await res.text()}`);
+		try {
+			const res = await fetch(endpoint, {
+				method: "POST",
+				headers: {
+					Authorization: authHeader,
+					Accept: "application/pdf",
+				},
+				body: form,
+			});
+			if (!res.ok) {
+				throw new Error(`HTTP ${res.status} ${await res.text()}`);
+			}
+			return new Uint8Array(await res.arrayBuffer());
+		} catch (error) {
+			if (config.localLlmEnabled) {
+				return mockWordToPdf();
+			}
+			throw error;
 		}
-		return new Uint8Array(await res.arrayBuffer());
 	}
 }
 
@@ -221,34 +228,6 @@ export class ExcelExtractionService {
 	}
 
 	private sheetToMarkdown(worksheet: XLSX.WorkSheet): string {
-		/**
-		 * Converts a worksheet into a compact Markdown table with guards:
-		 * - Caps processed range using decoded !ref → at most MAX_ROWS × MAX_COLS from start
-		 * - Skips hidden rows/columns and blank rows (sheet_to_json opts)
-		 * - Trims trailing empty cells in header and data rows
-		 * - Enforces consistent column count from the trimmed header
-		 * - Escapes Markdown metacharacters and truncates overly long cell contents
-		 *
-		 * Example input (rows as arrays):
-		 *   Header: ["Name", "Age", "", ""]
-		 *   Row 1:  ["Alice", "30", "", ""]
-		 *   Row 2:  ["Bob", "", "", ""]
-		 *   Row 3:  ["", "", "", ""]  // all-empty -> skipped
-		 *   Row 4:  ["Carol", "27", "", ""]
-		 *
-		 * Resulting Markdown:
-		 *   | Name | Age |
-		 *   |---|---|
-		 *   | Alice | 30 |
-		 *   | Bob |  |
-		 *   | Carol | 27 |
-		 */
-
-		// 0) Determine a capped range from !ref
-		// !ref is the A1-style sheet bounds. We decode to 0-based row/col (inclusive),
-		// then cap the end row/col to at most (start + MAX_* - 1). Finally we re-encode.
-		// Example: if !ref="A1:ZZ100000", MAX_ROWS=2000, MAX_COLS=64 and start is A1,
-		// cappedRef becomes "A1:BL2000".
 		const ref = worksheet["!ref"] || "A1";
 		const range = XLSX.utils.decode_range(ref);
 		const {
@@ -278,11 +257,6 @@ export class ExcelExtractionService {
 			return "";
 		}
 
-		/**
-		 * Trim trailing empty cells.
-		 * Example: ["A", "B", "", ""] -> ["A", "B"]
-		 *          ["", "", ""]        -> []
-		 */
 		const toTrimmed = (cells: string[]): string[] => {
 			const last = ExcelExtractionService.findLastNonEmptyIndex(cells);
 			return last >= 0 ? cells.slice(0, last + 1) : [];
@@ -307,19 +281,6 @@ export class ExcelExtractionService {
 			markdown += `|${headerRow.map(() => SEP).join("|")}|\n`;
 		}
 
-		/**
-		 * 3) Render data rows:
-		 *    - Trim trailing empty cells
-		 *    - Skip all-empty rows
-		 *    - Align to header width:
-		 *        - Truncate excess cells
-		 *        - Pad with "" when too short
-		 *
-		 * Example:
-		 *   Header width = 2
-		 *   Row ["A", "", "", ""] -> ["A"] -> pad -> ["A", ""]
-		 *   Row ["X", "Y", "Z"]   -> truncate -> ["X", "Y"]
-		 */
 		for (let i = 1; i < rows.length; i++) {
 			const normalized = rows[i].map(ExcelExtractionService.sanitizeCell);
 			const trimmed = toTrimmed(normalized);
@@ -348,11 +309,44 @@ export class MistralOCRService {
 		return config.nodeEnv === "test";
 	}
 
+	private async extractPdfLocally(pdfBytes: Uint8Array): Promise<ParsedPage[]> {
+		const pdfBytesCopy = new Uint8Array(pdfBytes);
+		await pdfjsReady;
+		const pdf = await getDocumentProxy(pdfBytesCopy);
+		const pages: ParsedPage[] = [];
+
+		for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+			const page = await pdf.getPage(pageNum);
+			const textContent = await page.getTextContent();
+			const content = textContent.items
+				.map((item) =>
+					"str" in item && typeof item.str === "string" ? item.str : "",
+				)
+				.join(" ")
+				.trim();
+			const safeContent = content || `(Seite ${pageNum})`;
+			pages.push({
+				content: safeContent,
+				pageNumber: pageNum,
+				tokenCount: countTokens(safeContent),
+			});
+		}
+
+		if (pages.length === 0) {
+			throw new Error("No pages found in PDF");
+		}
+
+		return pages;
+	}
+
 	async extractTextFromPdfWithMistral(
 		pdfBytes: Uint8Array,
 	): Promise<ParsedPage[]> {
 		if (this.shouldMockExternalServices()) {
 			return mockOcrPages();
+		}
+		if (config.localLlmEnabled) {
+			return this.extractPdfLocally(pdfBytes);
 		}
 
 		const client = new Mistral({ apiKey: config.mistralApiKey });
